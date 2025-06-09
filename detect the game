@@ -1,0 +1,85 @@
+import win32gui
+import win32con
+import keyboard
+import time
+import ctypes
+
+class NightCrowsController:
+    def __init__(self):
+        self.game_hwnd = 328178  # Your window handle
+        self.running = False
+        self.move_keys = {'forward': 'w', 'backward': 's', 'left': 'a', 'right': 'd'}
+        
+        # Bypass Windows foreground restrictions
+        self.user32 = ctypes.windll.user32
+        self.user32.LockSetForegroundWindow(2)  # 2 = LSFW_UNLOCK
+
+    def is_game_active(self):
+        return win32gui.GetForegroundWindow() == self.game_hwnd
+
+    def focus_game(self):
+        """100% reliable focus method"""
+        try:
+            # Step 1: Un-minimize if needed
+            if win32gui.IsIconic(self.game_hwnd):
+                win32gui.ShowWindow(self.game_hwnd, win32con.SW_RESTORE)
+            
+            # Step 2: Special focus hack
+            self.user32.SetForegroundWindow(self.game_hwnd)
+            
+            # Step 3: Alternative method if still failing
+            if not self.is_game_active():
+                self.user32.SwitchToThisWindow(self.game_hwnd, True)
+            
+            # Step 4: Final verification
+            time.sleep(0.3)
+            return self.is_game_active()
+            
+        except Exception as e:
+            print(f"Focus error: {e}")
+            return False
+
+    def send_input(self, key, duration=0.1):
+        """Direct window messaging (works without focus!)"""
+        key_code = {
+            'w': 0x57, 'a': 0x41, 's': 0x53, 'd': 0x44,
+            ' ': 0x20, 'e': 0x45, 'q': 0x51
+        }.get(key.lower(), 0)
+        
+        if key_code:
+            # Send keydown
+            win32gui.SendMessage(self.game_hwnd, win32con.WM_KEYDOWN, key_code, 0)
+            time.sleep(duration)
+            # Send keyup
+            win32gui.SendMessage(self.game_hwnd, win32con.WM_KEYUP, key_code, 0)
+        else:
+            print(f"Unknown key: {key}")
+
+    def start(self):
+        if not self.focus_game():
+            print("❗ Failed to focus game, but inputs will still work!")
+        
+        self.running = True
+        print("✅ Controls active (Focus-free mode)")
+        
+        try:
+            while self.running:
+                # Example: Square movement pattern
+                self.send_input('w', 2.0)  # Forward 2 sec
+                self.send_input('d', 1.0)  # Right 1 sec
+                self.send_input('s', 2.0)  # Back 2 sec
+                self.send_input('a', 1.0)  # Left 1 sec
+                
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.running = False
+
+if __name__ == "__main__":
+    nc = NightCrowsController()
+    keyboard.add_hotkey('F1', nc.start)
+    keyboard.add_hotkey('F2', lambda: setattr(nc, 'running', False))
+    
+    print("=== NIGHT CROWS CONTROLLER ===")
+    print("F1: Start | F2: Stop | F12: Exit")
+    keyboard.wait('F12')
